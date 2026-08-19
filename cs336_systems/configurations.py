@@ -29,7 +29,7 @@ class BenchmarkConfig:
 
     # system
     device: str | None = None
-    out_dir: str ="/Users/sachingarg/Desktop/LLM-CS336/assignment2-systems/benchmarking"
+    out_dir: str ="results"
 
     
 
