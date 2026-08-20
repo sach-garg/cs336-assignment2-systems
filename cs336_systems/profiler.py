@@ -69,22 +69,22 @@ def main():
             continue
         optimizer.step()
 
-
-    for _ in range(1): ## Profiling only 1 iteration
-        with nvtx.range("Forward"):
-            logits = model(x)
-        if config.mode=="F":
-            continue
-        with nvtx.range("Loss"):
-            loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
-        optimizer.zero_grad()
-        with nvtx.range("Backward"):
-            loss.backward()
-        if config.mode == "FB":
-            continue
-        with nvtx.range("Optimizer"):
-            optimizer.step()
-       
+    with nvtx.range("profile_region"):
+        for _ in range(1): ## Profiling only 1 iteration
+            with nvtx.range("Forward"):
+                logits = model(x)
+            if config.mode=="F":
+                continue
+            with nvtx.range("Loss"):
+                loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
+            optimizer.zero_grad()
+            with nvtx.range("Backward"):
+                loss.backward()
+            if config.mode == "FB":
+                continue
+            with nvtx.range("Optimizer"):
+                optimizer.step()
+        
 
 if __name__ == "__main__":
     main()
