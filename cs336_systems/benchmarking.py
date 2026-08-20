@@ -9,6 +9,32 @@ import pandas as pd
 
 from cs336_systems.configurations import BenchmarkConfig
 
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--context_length", type=int)
+    parser.add_argument("--d_model", type=int)
+    parser.add_argument("--d_ff", type=int)
+    parser.add_argument("--num_layers", type=int)
+    parser.add_argument("--num_heads", type=int)
+    parser.add_argument("--batch_size", type=int)
+    parser.add_argument("--measure_iters", type=int)
+    parser.add_argument("--warmup", type=int)
+    parser.add_argument("--mode", type=str, choices=["F", "FB", "FBO"])
+    parser.add_argument("--device", type=str)
+    parser.add_argument("--out_dir", type=str)
+    return parser.parse_args()
+
+
+def BuildConfig():
+    config = BenchmarkConfig()
+    args = parse_args()
+    for key, value in vars(args).items():
+        if value is not None:
+            setattr(config, key, value)
+    return config
+
 
 def append_benchmark_result(config, device, times):
     out_path = Path(config.out_dir) / "benchmark_history.pkl"
@@ -28,7 +54,7 @@ def append_benchmark_result(config, device, times):
 
 def main():
     
-    config = BenchmarkConfig()
+    config = BuildConfig()
     out_dir = Path(config.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
