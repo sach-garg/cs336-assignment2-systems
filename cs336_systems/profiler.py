@@ -2,6 +2,7 @@ from cs336_basics.model import BasicsTransformerLM
 from cs336_basics.optimizer import AdamW
 from cs336_basics.nn_utils import cross_entropy
 import torch
+import torch.cuda.nvtx as nvtx
 
 
 from cs336_systems.configurations import BenchmarkConfig
@@ -69,16 +70,20 @@ def main():
         optimizer.step()
 
 
-    for _ in range(config.measure_iters):
-        logits = model(x)
+    for _ in range(1): ## Profiling only 1 iteration
+        with nvtx.range("Forward"):
+            logits = model(x)
         if config.mode=="F":
             continue
-        loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
+        with nvtx.range("Loss"):
+            loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
         optimizer.zero_grad()
-        loss.backward()
+        with nvtx.range("Backward"):
+            loss.backward()
         if config.mode == "FB":
             continue
-        optimizer.step()
+        with nvtx.range("Optimizer"):
+            optimizer.step()
        
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import warnings
+import torch.cuda.nvtx as nvtx
 
 import einx
 import torch
@@ -12,6 +13,7 @@ import torch.nn as nn
 from einops import einsum, rearrange
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
+
 
 from cs336_basics.nn_utils import softmax
 
@@ -569,9 +571,11 @@ class TransformerBlock(nn.Module):
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor | None = None,mask:torch.Tensor | None=None):
         y = self.ln1(x)
-        x = x + self.attn(y,token_positions,mask)
+        with nvtx.range("Attention"):
+            x = x + self.attn(y,token_positions,mask)
         y = self.ln2(x)
-        x = x + self.ffn(y)
+        with nvtx.range("FFN"):
+            x = x + self.ffn(y)
         return x
 
        
@@ -664,7 +668,8 @@ def scaled_dot_product_attention(Q:torch.Tensor,K:torch.Tensor,V:torch.Tensor,ma
         masked_attention = attention_matrix.masked_fill(~mask, float("-inf"))
     else:
         masked_attention = attention_matrix
-    attention_scores = softmax(masked_attention,dim=-1)
+    with nvtx.range("Softmax"):
+        attention_scores = softmax(masked_attention,dim=-1)
     return attention_scores@V
 
 
