@@ -3,6 +3,7 @@ from cs336_basics.optimizer import AdamW
 from cs336_basics.nn_utils import cross_entropy
 import torch
 import torch.cuda.nvtx as nvtx
+from contextlib import nullcontext
 
 
 from cs336_systems.configurations import BenchmarkConfig
@@ -24,6 +25,7 @@ def parse_args():
     parser.add_argument("--profile_memory", action="store_true")
     parser.add_argument("--memory_file", type=str)
     parser.add_argument("--out_dir", type=str)
+    parser.add_argument("--precision",type=str,choices = ["torch.float32","torch.float16","torch.bfloat16"])
     return parser.parse_args()
 
 
@@ -46,6 +48,16 @@ def main():
 
     device = config.device if config.device is not None else ("cuda" if torch.cuda.is_available() else "cpu")
 
+    if config.precision == "torch.float16":
+        #autocast = torch.autocast(device_type="cuda", dtype=torch.float16) ### Not a very clean way to stor and keep using same context manager
+        autocast = lambda: torch.autocast(device_type="cuda", dtype=torch.float16) ## Better way to create new cobtext manager, whenever needed
+    elif config.precision == "torch.bfloat16":
+        #autocast = torch.autocast(device_type="cuda", dtype=torch.bfloat16)
+        autocast = lambda: torch.autocast(device_type="cuda", dtype=torch.bfloat16)
+    else:
+        #autocast = nullcontext()
+        autocast = lambda:nullcontext()
+
     data = torch.randint(high=config.vocab_size, size=(config.batch_size, config.context_length+1), 
                            dtype=torch.long, device =device)
 
@@ -61,10 +73,12 @@ def main():
                        betas=(config.beta1, config.beta2),eps=config.eps)
 
     for _ in range(config.warmup):
-        logits = model(x,use_nvtx=False)
+        with autocast():
+            logits = model(x,use_nvtx=False)
         if config.mode == "F":
             continue
-        loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
+        with autocast():
+            loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
         optimizer.zero_grad()
         loss.backward()
         if config.mode == "FB":
@@ -77,11 +91,13 @@ def main():
     with nvtx.range("profile_region"):
         for _ in range(1): ## Profiling only 1 iteration
             with nvtx.range("Forward"):
-                logits = model(x,use_nvtx=True)
+                with autocast():
+                    logits = model(x,use_nvtx=True)
             if config.mode=="F":
                 continue
             with nvtx.range("Loss"):
-                loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
+                with autocast():
+                    loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
             optimizer.zero_grad()
             with nvtx.range("Backward"):
                 loss.backward()
