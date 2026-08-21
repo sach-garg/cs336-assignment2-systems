@@ -21,6 +21,8 @@ def parse_args():
     parser.add_argument("--warmup", type=int)
     parser.add_argument("--mode", type=str, choices=["F", "FB", "FBO"])
     parser.add_argument("--device", type=str)
+    parser.add_argument("--profile_memory", action="store_true")
+    parser.add_argument("--memory_file", type=str)
     parser.add_argument("--out_dir", type=str)
     return parser.parse_args()
 
@@ -59,7 +61,7 @@ def main():
                        betas=(config.beta1, config.beta2),eps=config.eps)
 
     for _ in range(config.warmup):
-        logits = model(x)
+        logits = model(x,use_nvtx=False)
         if config.mode == "F":
             continue
         loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
@@ -69,10 +71,13 @@ def main():
             continue
         optimizer.step()
 
+    if config.profile_memory:
+        torch.cuda.memory._record_memory_history(max_entries=100000)
+
     with nvtx.range("profile_region"):
         for _ in range(1): ## Profiling only 1 iteration
             with nvtx.range("Forward"):
-                logits = model(x)
+                logits = model(x,use_nvtx=True)
             if config.mode=="F":
                 continue
             with nvtx.range("Loss"):
@@ -84,6 +89,10 @@ def main():
                 continue
             with nvtx.range("Optimizer"):
                 optimizer.step()
+
+    if config.profile_memory:
+        torch.cuda.memory._dump_snapshot(config.memory_file)
+        torch.cuda.memory._record_memory_history(enabled=None)
         
 
 if __name__ == "__main__":

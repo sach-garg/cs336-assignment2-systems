@@ -475,7 +475,7 @@ class BasicsTransformerLM(nn.Module):
         self.lm_head = Linear(d_model, vocab_size, device=self.device, dtype=self.dtype)
 
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor,use_nvtx:bool=False) -> torch.Tensor:
         sequence_length = x.shape[-1]
         if sequence_length > self.context_length:
             raise ValueError(f"Sequence length exceeds context length {self.context_length}")
@@ -483,7 +483,7 @@ class BasicsTransformerLM(nn.Module):
         x = self.token_embeddings(x)
 
         for layer in self.layers:
-            x = layer(x,mask=self.causal_mask)
+            x = layer(x,mask=self.causal_mask,use_nvtx = use_nvtx)
 
         x = self.ln_final(x)
         logits = self.lm_head(x)
@@ -569,13 +569,19 @@ class TransformerBlock(nn.Module):
         self.ffn = SwiGLU(d_model=d_model,d_ff=d_ff,device=self.device,dtype=self.dtype)
 
 
-    def forward(self, x: torch.Tensor, token_positions: torch.Tensor | None = None,mask:torch.Tensor | None=None):
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor | None = None,mask:torch.Tensor | None=None,use_nvtx:bool=False):
         y = self.ln1(x)
-        with nvtx.range("Attention"):
-            x = x + self.attn(y,token_positions,mask)
+        if use_nvtx:
+            with nvtx.range("Attention"):
+                x = x + self.attn(y,token_positions,mask,use_nvtx)
+        else:
+            x = x + self.attn(y,token_positions,mask,use_nvtx)
         y = self.ln2(x)
-        with nvtx.range("FFN"):
-            x = x + self.ffn(y)
+        if use_nvtx:
+            with nvtx.range("FFN"):
+                x = x + self.ffn(y)
+        else:
+             x = x + self.ffn(y)
         return x
 
        
@@ -655,7 +661,7 @@ class SwiGLU(nn.Module):
 """ No change in scaled_dot_product_attention. Only Softmax -> softmax"""
 
 
-def scaled_dot_product_attention(Q:torch.Tensor,K:torch.Tensor,V:torch.Tensor,mask=None):
+def scaled_dot_product_attention(Q:torch.Tensor,K:torch.Tensor,V:torch.Tensor,mask=None,use_nvtx:bool=False):
     Tq,Cq = Q.shape[-2], Q.shape[-1]
     Tk,Ck = K.shape[-2], K.shape[-1] #### If not self-attention then Tq and Tk could be different, but Cq,Ck would be same
 
@@ -668,8 +674,12 @@ def scaled_dot_product_attention(Q:torch.Tensor,K:torch.Tensor,V:torch.Tensor,ma
         masked_attention = attention_matrix.masked_fill(~mask, float("-inf"))
     else:
         masked_attention = attention_matrix
-    with nvtx.range("Softmax"):
+    if use_nvtx:
+        with nvtx.range("Softmax"):
+            attention_scores = softmax(masked_attention,dim=-1)
+    else:
         attention_scores = softmax(masked_attention,dim=-1)
+
     return attention_scores@V
 
 
@@ -796,7 +806,7 @@ class CausalMultiHeadSelfAttention(nn.Module):
         self.v_proj = Linear(d_model, d_model, device=self.device, dtype=dtype)
         self.output_proj = Linear(d_model, d_model, device=self.device, dtype=dtype)
 
-    def forward(self, x: torch.Tensor, token_positions: torch.Tensor | None = None,mask: None=None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor | None = None,mask: torch.Tensor | None=None, use_nvtx:bool=False) -> torch.Tensor:
         C = x.shape[-1]
         T = x.shape[-2]
 
@@ -825,7 +835,7 @@ class CausalMultiHeadSelfAttention(nn.Module):
             mask = torch.tril(torch.ones(T, T, device=x.device, dtype=torch.bool))
         else:
             mask = mask[:T,:T]
-        attention = scaled_dot_product_attention(Q, K, V, mask)
+        attention = scaled_dot_product_attention(Q, K, V, mask,use_nvtx)
 
         *batch_dims, h, T, d_head = attention.shape
         attn_out = attention.transpose(-3, -2).reshape(*batch_dims, T, h * d_head)

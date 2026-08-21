@@ -32,6 +32,8 @@ class BenchmarkConfig:
     device: str | None = None
     precision: str = "torch.float32" ## Precision for autocasting
     out_dir: str ="results"
+    profile_memory:bool=False
+    memory_file:str = "memory_snapshot.pkl"
 
     
 
