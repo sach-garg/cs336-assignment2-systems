@@ -53,7 +53,7 @@ x = torch.randn(2,400,device=device)
 y = torch.randn(2, 400, device=device)
 model = model.to(device)
 #dtype = torch.float16
-dytpe = torch.bfloat16
+dtype = torch.bfloat16
 
 print("parameter dtype outside autocontext:", model.fc1.weight.dtype)
 
