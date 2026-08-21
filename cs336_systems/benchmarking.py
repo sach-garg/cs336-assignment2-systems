@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument("--warmup", type=int)
     parser.add_argument("--mode", type=str, choices=["F", "FB", "FBO"])
     parser.add_argument("--device", type=str)
-    parser.add_argument("--precision",dtype=str,choices = ["torch.float32","torch.float16","torch.bfloat16"])
+    parser.add_argument("--precision",type=str,choices = ["torch.float32","torch.float16","torch.bfloat16"])
     parser.add_argument("--out_dir", type=str)
     
     return parser.parse_args()
@@ -113,7 +113,6 @@ def main():
         torch.cuda.synchronize()
 
     
-
     for _ in range(config.measure_iters):
         if "cuda" in device:
             torch.cuda.synchronize()
