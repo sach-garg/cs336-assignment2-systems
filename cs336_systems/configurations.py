@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class BenchmarkConfig:
     vocab_size: int = 10000
@@ -29,6 +30,7 @@ class BenchmarkConfig:
 
     # system
     device: str | None = None
+    precision: str = "torch.float32" ## Precision for autocasting
     out_dir: str ="results"
 
     

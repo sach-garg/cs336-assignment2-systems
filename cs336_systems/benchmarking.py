@@ -5,6 +5,7 @@ from pathlib import Path
 import torch
 from timeit import default_timer
 import pandas as pd
+from contextlib import nullcontext
 
 
 from cs336_systems.configurations import BenchmarkConfig
@@ -23,7 +24,9 @@ def parse_args():
     parser.add_argument("--warmup", type=int)
     parser.add_argument("--mode", type=str, choices=["F", "FB", "FBO"])
     parser.add_argument("--device", type=str)
+    parser.add_argument("--precision",dtype=str,choices = ["torch.float32","torch.float16","torch.bfloat16"])
     parser.add_argument("--out_dir", type=str)
+    
     return parser.parse_args()
 
 
@@ -33,6 +36,8 @@ def BuildConfig():
     for key, value in vars(args).items():
         if value is not None:
             setattr(config, key, value)
+    
+    
     return config
 
 
@@ -41,7 +46,7 @@ def append_benchmark_result(config, device, times):
     new_row = pd.DataFrame(
         [{"d_model": config.d_model, "d_ff": config.d_ff,
             "num_layers": config.num_layers,"num_heads": config.num_heads,
-            "mode": config.mode, "warm_up": config.warmup, "device": device,
+            "mode": config.mode, "warm_up": config.warmup, "device": device, "dtype":config.precision,
               "Avg_time": pd.Series(times).mean(), "Std_time": pd.Series(times).std(), "times": times}])
 
     if out_path.exists():
@@ -57,6 +62,16 @@ def main():
     config = BuildConfig()
     out_dir = Path(config.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if config.precision == "torch.float16":
+        #autocast = torch.autocast(device_type="cuda", dtype=torch.float16) ### Not a very clean way to stor and keep using same context manager
+        autocast = lambda: torch.autocast(device_type="cuda", dtype=torch.float16) ## Better way to create new cobtext manager, whenever needed
+    elif config.precision == "torch.bfloat16":
+        #autocast = torch.autocast(device_type="cuda", dtype=torch.bfloat16)
+        autocast = lambda: torch.autocast(device_type="cuda", dtype=torch.bfloat16)
+    else:
+        #autocast = nullcontext()
+        autocast = lambda:nullcontext()
 
     if config.mode not in ["F", "FB", "FBO"]:
         raise ValueError("mode must be one of 'F', 'FB', or 'FBO'")
@@ -77,13 +92,18 @@ def main():
     optimizer = AdamW(model.parameters(), lr=config.lr_max, weight_decay=config.weight_decay,
                        betas=(config.beta1, config.beta2),eps=config.eps)
 
-    for it in range(config.warmup):
-        logits = model(x)
+    
+
+  
+    for _ in range(config.warmup):
+        with autocast():
+            logits = model(x)
         if config.mode == "F":
             continue
-        loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
-        optimizer.zero_grad()
-        loss.backward()
+        with autocast():
+            loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
+        optimizer.zero_grad() ## Optimizer and backward use same dtypes as produced in forward pass, so no autocasting
+        loss.backward() ## Also optimizer ans backward produce and use gradients, so no autocasting on them
         if config.mode == "FB":
             continue
         optimizer.step()
@@ -94,12 +114,13 @@ def main():
 
     
 
-    for it in range(config.measure_iters):
+    for _ in range(config.measure_iters):
         if "cuda" in device:
             torch.cuda.synchronize()
         start = default_timer()
 
-        logits = model(x)
+        with autocast():
+            logits = model(x)
 
         if config.mode=="F":
             if "cuda" in device:
@@ -107,7 +128,8 @@ def main():
             end = default_timer()
             times.append(end-start)
             continue
-        loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
+        with autocast():
+            loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1)) ### -> [B*T,V], [B*T]
         optimizer.zero_grad()
         loss.backward()
         if config.mode == "FB":
@@ -117,7 +139,7 @@ def main():
             times.append(end-start)
             continue
         optimizer.step()
-       
+    
         if config.mode == "FBO":
             if "cuda" in device:
                 torch.cuda.synchronize()
