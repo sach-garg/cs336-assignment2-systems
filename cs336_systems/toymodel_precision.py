@@ -52,7 +52,8 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 x = torch.randn(2,400,device=device)
 y = torch.randn(2, 400, device=device)
 model = model.to(device)
-dtype = torch.float16
+#dtype = torch.float16
+dytpe = torch.bfloat16
 
 print("parameter dtype outside autocontext:", model.fc1.weight.dtype)
 
