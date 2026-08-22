@@ -35,6 +35,10 @@ class BenchmarkConfig:
     profile_memory:bool=False
     memory_file:str = "memory_snapshot.pkl"
 
+    ## Activation Checkpointing and operator fusion
+    operator_fusion:bool=False
+    chunk_size:int | None=None
+
     
 
 
