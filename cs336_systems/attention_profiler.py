@@ -13,9 +13,14 @@ def main():
     stats={}
     for d_model in [16,32,64,128]:
         for T in [256, 1024, 4096, 8192, 16384]:
+            print(f"Running d_model={d_model}, T={T}", flush=True)
             forward_times =[]
             backward_times =[]
             memory_before_backward=[]
+            Q=None
+            K=None
+            V=None
+            mask=None
             attn=None
             try:
                 Q = torch.randn(B,T,d_model,device=device, dtype=torch.float32,requires_grad=True)
@@ -66,8 +71,7 @@ def main():
 
             del Q, K, V,attn,mask
             torch.cuda.empty_cache()
-        stats_df = pd.DataFrame.from_dict(stats, orient="index")
-
+    stats_df = pd.DataFrame.from_dict(stats, orient="index")
     stats_df.index = pd.MultiIndex.from_tuples(stats_df.index, names=["d_model", "T"])
     stats_df = stats_df.reset_index()
     stats_df.to_pickle("pytorch_attention_benchmark.pkl")
