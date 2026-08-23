@@ -12,7 +12,10 @@ def main():
     operator_fuse = True
 
     if operator_fuse:
-        scaled_dot_product_attention  = torch.compile(scaled_dot_product_attention)
+        #scaled_dot_product_attention  = torch.compile(scaled_dot_product_attention) ## scoping issue comes UnboundLocalError: cannot access local variable 'scaled_dot_product_attention' where it is not associated with a value
+        attn_func = torch.compile(scaled_dot_product_attention)
+    else:
+        attn_func = scaled_dot_product_attention
     
     stats={}
     for d_model in [16,32,64,128]:
@@ -42,7 +45,7 @@ def main():
 
                 for _ in range(profile_iterations):
                     start = default_timer()
-                    attn = scaled_dot_product_attention(Q,K,V,mask,use_nvtx=False)
+                    attn = attn_func(Q,K,V,mask,use_nvtx=False)
                     torch.cuda.synchronize()
                     end = default_timer()
                     forward_times.append(end-start)
