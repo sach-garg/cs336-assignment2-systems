@@ -35,7 +35,7 @@ def main():
                 V = torch.randn(B,T,d_model,device=device, dtype=torch.float32,requires_grad=True)
                 mask = torch.tril(torch.ones(T,T,device=device,dtype=torch.bool))
                 for _ in range(warmup):
-                    attn = scaled_dot_product_attention(Q,K,V,mask,use_nvtx=False)
+                    attn = attn_func(Q,K,V,mask,use_nvtx=False)
                     if Q.grad is not None: Q.grad = None
                     if K.grad is not None: K.grad = None
                     if V.grad is not None: V.grad = None
