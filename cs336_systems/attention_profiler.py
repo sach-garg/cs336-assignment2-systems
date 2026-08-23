@@ -9,6 +9,10 @@ def main():
     B = 8
     warmup=2
     profile_iterations=100
+    operator_fuse = True
+
+    if operator_fuse:
+        scaled_dot_product_attention  = torch.compile(scaled_dot_product_attention)
     
     stats={}
     for d_model in [16,32,64,128]:
