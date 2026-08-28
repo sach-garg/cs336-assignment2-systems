@@ -19,11 +19,11 @@ def setup(rank,world_size):
   os.environ["MASTER_PORT"] = "29501"
   device = torch.device(f"cuda:{rank}")
   torch.cuda.set_device(device)
-  dist.init_process_group(backend="nccl",rank=rank,world_size=world_size,device=device) ## "nccl" for GPUs
+  dist.init_process_group(backend="nccl",rank=rank,world_size=world_size,device_id=device) ## "nccl" for GPUs
 
 def sum_across_devices(rank,world_size,m,result_queue):
   setup(rank,world_size)
-  data = torch.zeros(m,dtype=torch.float33,device=f"cuda:{rank}")
+  data = torch.zeros(m,dtype=torch.float32,device=f"cuda:{rank}")
 
   ### warm_up
   for _ in range(5):
@@ -69,7 +69,7 @@ def main():
       mp.spawn(fn=sum_across_devices,args=(world_size,m,result_queue),nprocs=world_size,join=True)
       times = result_queue.get()
       stats.append({"world_size":world_size, "tensor_size": tensor_sizes[i], "times":times,"avg_time": pd.Series(times).mean(), "std_time": pd.Series(times).std()})
-      print(f"world_size: {world_size}, Tensor_size:{tensor_sizes[i]}, Avgtime:{pd.Series(times).mean()}")
+      print(f"world_size: {world_size}, Tensor_size:{tensor_sizes[i]}, Avgtime:{pd.Series(times).mean()}",flush=True)
   stats_df = pd.DataFrame(stats)
   stats_df.to_csv("allreduce_benchmarking.csv",index=False)
   return
