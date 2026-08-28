@@ -4,7 +4,6 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 from timeit import default_timer
 import pandas as pd
-import pickle
 
 ### For CPU
 def setup_CPU(rank,world_size):
@@ -17,7 +16,7 @@ def setup_CPU(rank,world_size):
 ### For single node, multi GPU training
 def setup(rank,world_size):
   os.environ["MASTER_ADDR"] = "localhost"
-  os.environ["MASTER_PORT"] = "29500"
+  os.environ["MASTER_PORT"] = "29501"
   torch.cuda.set_device(rank)
   dist.init_process_group("nccl",rank=rank,world_size=world_size) ## "nccl" for GPUs
 
@@ -51,7 +50,9 @@ def sum_across_devices(rank,world_size,m,result_queue):
   if rank==0:
     times =[t.item() for t in all_times]
     result_queue.put(times)
-  
+
+  dist.barrier()
+  torch.cuda.synchronize()
   dist.destroy_process_group()
 
 def main():
