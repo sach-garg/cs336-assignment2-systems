@@ -61,6 +61,7 @@ def main():
   for world_size in [2,4,6]:
   
     for i,s in enumerate(tensor_sizes):
+      print(world_size,s)
    
       m = s*(1024**2)//4 ## we will create fp32 tensors
       result_queue = spawn_context.SimpleQueue() ## jargon
