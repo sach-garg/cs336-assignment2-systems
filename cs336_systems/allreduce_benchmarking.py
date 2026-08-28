@@ -17,13 +17,13 @@ def setup_CPU(rank,world_size):
 def setup(rank,world_size):
   os.environ["MASTER_ADDR"] = "localhost"
   os.environ["MASTER_PORT"] = "29501"
-  torch.cuda.set_device(rank)
-  dist.init_process_group("nccl",rank=rank,world_size=world_size) ## "nccl" for GPUs
+  device = torch.device(f"cuda:{rank}")
+  torch.cuda.set_device(device)
+  dist.init_process_group(backend="nccl",rank=rank,world_size=world_size,device=device) ## "nccl" for GPUs
 
 def sum_across_devices(rank,world_size,m,result_queue):
   setup(rank,world_size)
-  data = torch.zeros(m,dtype=torch.float32).to("cuda") 
-  #data = torch.randn(m,dtype=torch.float32) ## CPU
+  data = torch.zeros(m,dtype=torch.float33,device=f"cuda:{rank}")
 
   ### warm_up
   for _ in range(5):
