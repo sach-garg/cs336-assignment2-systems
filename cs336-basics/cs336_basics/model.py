@@ -7,11 +7,11 @@ import os
 import warnings
 import torch.cuda.nvtx as nvtx
 
-import einx
+#import einx
 import torch
 import torch.nn as nn
-from einops import einsum, rearrange
-from jaxtyping import Bool, Float, Int
+#from einops import einsum, rearrange
+#from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
 
@@ -551,7 +551,7 @@ class BasicsTransformerLM(nn.Module):
 
 class TransformerBlock(nn.Module):
     def __init__(self,d_model: int, num_heads: int, d_ff: int,positional_encoder: RotaryEmbedding | None = None,
-                 device=None,dtype=None,):
+                 device=None,dtype=None):
         super().__init__()
         if d_model % num_heads != 0:
             raise ValueError(f"d_model={d_model} must be divisible by num_heads={num_heads}")
@@ -668,7 +668,11 @@ def scaled_dot_product_attention(Q:torch.Tensor,K:torch.Tensor,V:torch.Tensor,ma
     Tv, Cv = V.shape[-2], V.shape[-1] ### Tv would be same as Tk
 
     ## Pytorch matmul
-    attention_matrix = Q@K.transpose(-1,-2)/math.sqrt(Cq)
+    if use_nvtx:
+        with nvtx.range("QK_transpose"):
+            attention_matrix = Q@K.transpose(-1,-2)/math.sqrt(Cq)
+    else:
+        attention_matrix = Q@K.transpose(-1,-2)/math.sqrt(Cq)
 
     if mask is not None:
         masked_attention = attention_matrix.masked_fill(~mask, float("-inf"))
