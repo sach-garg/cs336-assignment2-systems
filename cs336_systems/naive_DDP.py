@@ -147,7 +147,7 @@ def main():
     df.to_csv("naive_ddp_benchmark.csv", index=False)
     return
 
-if __name__ == "main":
+if __name__ == "__main__":
     main()
 
 
