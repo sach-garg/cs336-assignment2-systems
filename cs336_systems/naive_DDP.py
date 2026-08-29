@@ -45,7 +45,7 @@ def setup(rank,world_size):
 
 
 
-def NaiveDDP_training(rank,world_size,config,result_queue):
+def NaiveDDP_training(rank,world_size,config,result_queue,flatten_grads):
     setup(rank,world_size)
 
     model = BasicsTransformerLM(config.vocab_size, config.context_length,config.d_model,
@@ -72,12 +72,22 @@ def NaiveDDP_training(rank,world_size,config,result_queue):
         loss = cross_entropy(logits.reshape(-1, logits.size(-1)),y.reshape(-1))
         optimizer.zero_grad()
         loss.backward()
-        with torch.no_grad():
-            for parameter in model.parameters():
-                if parameter.grad is None:
-                    continue
-                dist.all_reduce(parameter.grad,op=dist.ReduceOp.SUM,async_op=False) ### all ranks will wait till all ranks reach here
-                parameter.grad.div_(world_size)
+        if not flatten_grads:
+            with torch.no_grad():
+                for parameter in model.parameters():
+                    if parameter.grad is None:
+                        continue
+                    dist.all_reduce(parameter.grad,op=dist.ReduceOp.SUM,async_op=False) ### all ranks will wait till all ranks reach here
+                    parameter.grad.div_(world_size)
+        else:
+            parameter_with_grad = [p for p in model.parameters() if p.grad is not None]
+            flat_grads = torch._utils._flatten_dense_tensors([p.grad for p in parameter_with_grad])
+            dist.all_reduce(flat_grads,op=dist.ReduceOp.SUM,async_op=False)
+            flat_grads.div_(world_size)
+            grads = torch._utils._unflatten_dense_tensors(flat_grads,parameter_with_grad)
+            for p,g in zip(parameter_with_grad,grads):
+                p.grad.copy_(g)
+
         optimizer.step()
 
     torch.cuda.synchronize() ## Finish warm up
@@ -97,12 +107,22 @@ def NaiveDDP_training(rank,world_size,config,result_queue):
         loss.backward()
         torch.cuda.synchronize() ### start recording communication time only once backward is finished
         comm_start_time = default_timer()
-        with torch.no_grad():
-            for parameter in model.parameters():
-                if parameter.grad is None:
-                    continue
-                dist.all_reduce(parameter.grad,op=dist.ReduceOp.SUM,async_op=False) ### all ranks will wait till all ranks reach here
-                parameter.grad.div_(world_size)
+        if not flatten_grads:
+             with torch.no_grad():
+                for parameter in model.parameters():
+                    if parameter.grad is None:
+                        continue
+                    dist.all_reduce(parameter.grad,op=dist.ReduceOp.SUM,async_op=False) ### all ranks will wait till all ranks reach here
+                    parameter.grad.div_(world_size)
+        else:
+            parameter_with_grad = [p for p in model.parameters() if p.grad is not None]
+            flat_grads = torch._utils._flatten_dense_tensors([p.grad for p in parameter_with_grad])
+            dist.all_reduce(flat_grads,op=dist.ReduceOp.SUM,async_op=False)
+            flat_grads.div_(world_size)
+            grads = torch._utils._unflatten_dense_tensors(flat_grads,parameter_with_grad)
+            for p,g in zip(parameter_with_grad,grads):
+                p.grad.copy_(g)
+  
         torch.cuda.synchronize() ### wait for communication to finish before stop recording communication time
         comm_end_time = default_timer()
         optimizer.step()
