@@ -158,7 +158,7 @@ def main():
     world_size=2
     spawn_context = mp.get_context("spawn")
     result_queue = spawn_context.SimpleQueue()
-    mp.spawn(fn=NaiveDDP_training,args=(world_size,config,result_queue),nprocs=world_size,join=True)
+    mp.spawn(fn=NaiveDDP_training,args=(world_size,config,result_queue,True),nprocs=world_size,join=True)
     results = result_queue.get()
     final_iteration_times = results["iteration_times"]
     final_comm_times = results["comm_times"]
